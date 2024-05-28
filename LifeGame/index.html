@@ -2,11 +2,64 @@
 	<head>
 		<meta charset="utf-8">
 		<title>WebGPU Life Game</title>
+
+		<style>
+			body {
+				background-color: #0d1120;
+				font-family: 'Courier New', Courier, monospace;
+			}
+			#page_title {
+				color: azure;
+				text-align: center;
+			}
+			#canvas_container {
+				border-style:solid;
+			}
+			#canvas_box {
+				display: block;
+    			margin-left: auto;
+    			margin-right: auto;
+			}
+			#log_box {
+				margin: 50px 10% 0 10%; 
+				align-self: center;
+				height: 150px;
+				border-style:solid;
+				overflow: scroll;
+				scrollbar-color: gray black;
+			}
+			.log_box_title {
+				margin: 0;
+				align-self: center;
+				text-align: center;
+				font-weight: 600;
+				font-size:large;
+				background-color: black;
+				color: grey;
+			}
+			p {
+				margin: 0;
+				font-weight: 600;
+			}
+			.error {
+				color: red;
+			}
+			.warning {
+				color: #CCCC10;
+			}
+			.info
+			{
+				color: azure;
+			}
+		</style>
 	</head>
 	<body>
-		<canvas id="canvas_box" height="512", width=512></canvas>
-		<div id="error_box">
-			<h4 class="error_box_title">Error Box</h4>
+	<h1 id="page_title">WebGPU Life Game</h1>
+		<div id="canvas_container">
+			<canvas id="canvas_box" height="512", width=512></canvas>
+		</div>
+		<div id="log_box">
+			<h4 class="log_box_title">Log Box</h4>
 		</div>
 		<script src="lifegame.js" async></script>
 	</body>

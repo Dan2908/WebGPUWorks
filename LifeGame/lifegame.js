@@ -18,28 +18,24 @@ const VERTEX_DATA = {
 };
 ///----------------------------
 
-function printError(msg) {
-	const errorBox = document.getElementById('error_box');
-	const errorMsg = document.createElement('p')
-	errorBox.hidden = false;
-
+function logMsg(msg, type) {
+	const errorMsg = document.createElement('p');
 	errorMsg.innerText = msg;
-	errorBox.appendChild(errorMsg);
-}
+	errorMsg.setAttribute("class", type);
 
-function hideErrorBox() {
-	document.getElementById('error_box').hidden = true;
+	const logBox = document.getElementById('log_box');
+	logBox.appendChild(errorMsg);
 }
 
 async function getAdapterDevice() {
 	const adapter = await navigator.gpu.requestAdapter();
 	if (!adapter) {
-		printError("Couldn't get navigator's GPU Adapter.");
+		logMsg("Error", "Couldn't get navigator's GPU Adapter.", "error");
 	}
 
 	const device = await adapter.requestDevice();
 	if (!device) {
-		printError("Couldn't get GPU Device.");
+		logMsg("Couldn't get GPU Device.", "error");
 	}
 
 	return device;
@@ -47,11 +43,9 @@ async function getAdapterDevice() {
 
 async function start() {
 
-	// Clear error box
-	hideErrorBox();
 	// check navigator support
 	if (!navigator.gpu) {
-		printError("WebGPU is not supported by this browser.");
+		logMsg("WebGPU is not supported by this browser.", "error");
 	}
 
 	// Get Device
@@ -100,12 +94,14 @@ async function start() {
 	//Randomly generate a 32bit number to randomly activate cells
 	VERTEX_DATA.cellStateArray.forEach(element => {
 		element = Math.trunc(Math.random() * 0xFFFFFFFF);
+		logMsg("stateElement: A " + element, "info");
 	});
 	device.queue.writeBuffer(cellStateBuffer[0], 0, VERTEX_DATA.cellStateArray); /* Cell state array -> Buffer A*/
-
+	
 	//Once again to the second buffer
 	VERTEX_DATA.cellStateArray.forEach(element => {
 		element = Math.trunc(Math.random() * 0xFFFFFFFF);
+		logMsg("stateElement: B " + element, "info");
 	});
 	device.queue.writeBuffer(cellStateBuffer[1], 0, VERTEX_DATA.cellStateArray); /* Cell state array -> Buffer B*/
 
@@ -176,17 +172,18 @@ async function start() {
 		@group(0) @binding(2) var<storage, read_write> cellStateOut: array<u32>;
 
 		fn getCellIndex(cell: vec2u) -> u32{
-			return (cell.y * u32(grid.x) + cell.x);
+			return (cell.y * u32(grid.x)) + cell.x;
 		}
 
 		fn switchCellState(index: u32) {
-			cellStateOut[index/32] ^= u32(1 << (index%32));
+			let index32 = index/32;
+			cellStateOut[index32] = cellStateIn[index32] ^ u32(1 << (index%32));
 		}
 
 		@compute @workgroup_size(${WORKGROUP_SIZE}, ${WORKGROUP_SIZE})
 		fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
 			let index = getCellIndex(cell.xy);
-			switchCellState(index);
+			cellStateOut[index] = cellStateIn[index];
 		}
 		`
 	});
@@ -273,17 +270,18 @@ async function start() {
 	let step = 0;
 	function UpdateTable() {
 		const encoder = device.createCommandEncoder();
-		// ComputePass
+		// Compute Pass
 		const computePass = encoder.beginComputePass();
 		
 		computePass.setPipeline(simulationPipeline);
 		computePass.setBindGroup(0, bindGroups[step % 2]);
 		const workgroupCount = Math.ceil(GRID_SIZE / WORKGROUP_SIZE);
 		computePass.dispatchWorkgroups(workgroupCount, workgroupCount);
+
 		computePass.end();
 
 		++step;
-		// Clear canvas
+		// Render Pass
 		const pass = encoder.beginRenderPass({
 			colorAttachments: [{
 				view: context.getCurrentTexture().createView(),
@@ -297,7 +295,7 @@ async function start() {
 		pass.setPipeline(cellPipeline);
 		pass.setBindGroup(0, bindGroups[step % 2]);
 		pass.setVertexBuffer(0, vertexBuffer);
-		pass.draw(VERTEX_DATA.rect_vertices.length / 2, GRID_SIZE * GRID_SIZE);
+		pass.draw(VERTEX_DATA.rect_vertices.length / 2, NUM_CELLS);
 
 		pass.end();
 		device.queue.submit([encoder.finish()]); /* encoder.finish() returns the command buffer to submit */
@@ -310,5 +308,5 @@ try {
 	start()
 }
 catch (e) {
-	printError("start() - Uncaught JavaScript error.", $(e));
+	logMsg("start() - Uncaught JavaScript error.", $(e), "error");
 }

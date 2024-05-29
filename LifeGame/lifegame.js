@@ -3,6 +3,8 @@ const NUM_CELLS = GRID_SIZE * GRID_SIZE;
 const UPDATE_INTERVAL = 200;
 const WORKGROUP_SIZE = 8;
 
+let LOGGER_COUNT = 0;
+
 const VERTEX_DATA = {
 	rect_vertices: new Float32Array([	/* Vertex array */
 		-0.8, 0.8,
@@ -19,12 +21,36 @@ const VERTEX_DATA = {
 ///----------------------------
 
 function logMsg(msg, type) {
-	const errorMsg = document.createElement('p');
-	errorMsg.innerText = msg;
-	errorMsg.setAttribute("class", type);
 
-	const logBox = document.getElementById('log_box');
-	logBox.appendChild(errorMsg);
+	const loggerLine = document.createElement('div');
+
+	const displayMsg = document.createElement('p');
+	displayMsg.setAttribute("class", type);
+	displayMsg.innerText = "[" + type + "] " + msg;
+	
+	const loggerCount = document.createElement('p');
+	loggerCount.setAttribute("class", "log_count");
+	loggerCount.innerText = LOGGER_COUNT + ":";
+
+	loggerLine.appendChild(loggerCount);
+	loggerLine.appendChild(displayMsg);
+
+	const logBox = document.getElementById('log_box').appendChild(loggerLine);
+
+	++LOGGER_COUNT;
+}
+
+function BinRep(number) {
+	let binNum = number.toString(2);
+	const leftZeros = 32 - binNum.length;
+
+	binNum = String("").padStart(leftZeros, "0") + binNum; 
+	let output = "";
+	for(let q = 0; q < 32; q += 4) {
+		output += binNum.substring(q, q + 4) + " ";
+	} 
+
+	return output;
 }
 
 async function getAdapterDevice() {
@@ -94,14 +120,14 @@ async function start() {
 	//Randomly generate a 32bit number to randomly activate cells
 	VERTEX_DATA.cellStateArray.forEach(element => {
 		element = Math.trunc(Math.random() * 0xFFFFFFFF);
-		logMsg("stateElement: A " + element, "info");
+		logMsg("stateElement A: " + BinRep(element), "info");
 	});
 	device.queue.writeBuffer(cellStateBuffer[0], 0, VERTEX_DATA.cellStateArray); /* Cell state array -> Buffer A*/
 	
 	//Once again to the second buffer
 	VERTEX_DATA.cellStateArray.forEach(element => {
 		element = Math.trunc(Math.random() * 0xFFFFFFFF);
-		logMsg("stateElement: B " + element, "info");
+		logMsg("stateElement: B " + BinRep(element), "info");
 	});
 	device.queue.writeBuffer(cellStateBuffer[1], 0, VERTEX_DATA.cellStateArray); /* Cell state array -> Buffer B*/
 
@@ -305,8 +331,9 @@ async function start() {
 }
 
 try {
+	logMsg("A long enough message to test the x overflow behavior in x, meaning the horizontal overflow of this box. We will try to fit more text than a normal screen can hold in a single line, then check if it is shown as expected.", "warning")
 	start()
 }
 catch (e) {
-	logMsg("start() - Uncaught JavaScript error.", $(e), "error");
+	logMsg(("start() - Uncaught JavaScript error.", $(e)), "error");
 }

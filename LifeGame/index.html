@@ -17,16 +17,19 @@
 			}
 			#canvas_box {
 				display: block;
-    			margin-left: auto;
-    			margin-right: auto;
+				margin-left: auto;
+				margin-right: auto;
 			}
 			#log_box {
 				margin: 50px 10% 0 10%; 
 				align-self: center;
 				height: 150px;
 				border-style:solid;
-				overflow: scroll;
+				overflow-y: scroll;
 				scrollbar-color: gray black;
+			}
+			#log_box div {
+				display: flex;
 			}
 			.log_box_title {
 				margin: 0;
@@ -51,10 +54,18 @@
 			{
 				color: azure;
 			}
+			.log_count {
+				color: gray;
+				font-weight: 400;
+				border-right: 1px solid;
+				margin-right: 10;
+				font-size: small;
+				overflow-x: visible;
+			}
 		</style>
 	</head>
 	<body>
-	<h1 id="page_title">WebGPU Life Game</h1>
+		<h1 id="page_title">WebGPU Life Game</h1>
 		<div id="canvas_container">
 			<canvas id="canvas_box" height="512", width=512></canvas>
 		</div>

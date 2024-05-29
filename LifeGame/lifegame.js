@@ -1,4 +1,4 @@
-const GRID_SIZE = 32;
+const GRID_SIZE = 64;
 const NUM_CELLS = GRID_SIZE * GRID_SIZE;
 const UPDATE_INTERVAL = 200;
 const WORKGROUP_SIZE = 8;
@@ -16,10 +16,11 @@ const VERTEX_DATA = {
 		-0.8, -0.8
 	]),
 	gridSizeUniform: new Float32Array([GRID_SIZE, GRID_SIZE]),
-	cellStateArray: new Uint32Array(NUM_CELLS / 32)
+	cellStateArray: new Uint32Array(GRID_SIZE * (GRID_SIZE / 32))
 };
 ///----------------------------
 
+// Log message in the log box. "type" can be set to "error", "warning" or "info" to color it accordingly.
 function logMsg(msg, type) {
 
 	const loggerLine = document.createElement('div');
@@ -27,7 +28,7 @@ function logMsg(msg, type) {
 	const displayMsg = document.createElement('p');
 	displayMsg.setAttribute("class", type);
 	displayMsg.innerText = "[" + type + "] " + msg;
-	
+
 	const loggerCount = document.createElement('p');
 	loggerCount.setAttribute("class", "log_count");
 	loggerCount.innerText = LOGGER_COUNT + ":";
@@ -35,24 +36,26 @@ function logMsg(msg, type) {
 	loggerLine.appendChild(loggerCount);
 	loggerLine.appendChild(displayMsg);
 
-	const logBox = document.getElementById('log_box').appendChild(loggerLine);
+	document.getElementById('messages').appendChild(loggerLine);
 
 	++LOGGER_COUNT;
 }
 
+// Get the 32 bit binary String representation of the given integer, in groups of four.
 function BinRep(number) {
 	let binNum = number.toString(2);
 	const leftZeros = 32 - binNum.length;
 
-	binNum = String("").padStart(leftZeros, "0") + binNum; 
+	binNum = String("").padStart(leftZeros, "0") + binNum;
 	let output = "";
-	for(let q = 0; q < 32; q += 4) {
+	for (let q = 0; q < 32; q += 4) {
 		output += binNum.substring(q, q + 4) + " ";
-	} 
+	}
 
 	return output;
 }
 
+// Get the GPU device.
 async function getAdapterDevice() {
 	const adapter = await navigator.gpu.requestAdapter();
 	if (!adapter) {
@@ -67,6 +70,15 @@ async function getAdapterDevice() {
 	return device;
 }
 
+function generateCells()
+{
+	for (let i = 0; i < VERTEX_DATA.cellStateArray.length; ++i) {
+		const random = Math.trunc(Math.random() * 100)
+		VERTEX_DATA.cellStateArray[i] += (8 << (random%32));
+	};
+}
+
+// Start working
 async function start() {
 
 	// check navigator support
@@ -89,7 +101,7 @@ async function start() {
 
 	// -------- CreateBuffers
 	/* Vertex buffer */
-	const vertexBuffer = device.createBuffer({		
+	const vertexBuffer = device.createBuffer({
 		label: "Vertex buffer",
 		size: VERTEX_DATA.rect_vertices.byteLength,
 		usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
@@ -97,7 +109,7 @@ async function start() {
 	device.queue.writeBuffer(vertexBuffer, 0, VERTEX_DATA.rect_vertices);	/* Vertex array -> Buffer */
 
 	/* Uniform buffer */
-	const uniformBuffer = device.createBuffer({		
+	const uniformBuffer = device.createBuffer({
 		label: "Uniform Buffer",
 		size: VERTEX_DATA.gridSizeUniform.byteLength,
 		usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
@@ -106,7 +118,7 @@ async function start() {
 
 	/* cell state (storage) buffer */
 	const cellStateBuffer = [
-		device.createBuffer({	
+		device.createBuffer({
 			label: "Cell State A",
 			size: VERTEX_DATA.cellStateArray.byteLength,
 			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
@@ -118,27 +130,13 @@ async function start() {
 		})];
 
 	//Randomly generate a 32bit number to randomly activate cells
-	VERTEX_DATA.cellStateArray.forEach(element => {
-		element = Math.trunc(Math.random() * 0xFFFFFFFF);
-		logMsg("stateElement A: " + BinRep(element), "info");
-	});
+	generateCells();
 	device.queue.writeBuffer(cellStateBuffer[0], 0, VERTEX_DATA.cellStateArray); /* Cell state array -> Buffer A*/
-	
+
 	//Once again to the second buffer
-	VERTEX_DATA.cellStateArray.forEach(element => {
-		element = Math.trunc(Math.random() * 0xFFFFFFFF);
-		logMsg("stateElement: B " + BinRep(element), "info");
-	});
+	//generateCells();
 	device.queue.writeBuffer(cellStateBuffer[1], 0, VERTEX_DATA.cellStateArray); /* Cell state array -> Buffer B*/
 
-	const vertexBufferLayout = {
-		arrayStride: 8,
-		attributes: [{
-			format: "float32x2",
-			offset: 0,
-			shaderLocation: 0
-		}]
-	}
 
 	const cellShaderModule = device.createShaderModule({
 		label: "Cell Shader Module",
@@ -160,23 +158,21 @@ async function start() {
 		@group(0) @binding(0) var<uniform> grid: vec2f;
 		@group(0) @binding(1) var<storage> cellState: array<u32>;
 		
-		fn getCellState(index: u32) -> f32 {
-			if((cellState[index/32] & u32(1 << (index%32))) != 0){
-				return 1;
-			} 
-			return 0;
+		fn getState(index: u32) -> f32 {
+			let byte = u32(index/32);
+			let bit = u32(index%32);
+			return f32((cellState[byte] >> bit) & 1u);
 		}
 		
 		@vertex 
-		fn vertexMain(input: VertexInput) -> VertexOutput {
-			
+		fn vertexMain(input: VertexInput) -> VertexOutput {	
 			let cellIndex = f32(input.instance);
 			let cell = vec2f(cellIndex % grid.x, floor(cellIndex / grid.x));
 			let cellOffset = cell / grid * 2;
-			let gridPos = (getCellState(input.instance) * input.pos + 1) / grid - 1 + cellOffset;
+			let gridPos = (input.pos + 1) / grid - 1 + cellOffset;
 			
 			var output: VertexOutput;
-			output.pos = vec4f(gridPos, 0, 1);
+			output.pos = getState(input.instance) * vec4f(gridPos, 0, 1);
 			output.cell = cell;
 			return output;
 		}
@@ -191,28 +187,69 @@ async function start() {
 
 	const simulationShaderModule = device.createShaderModule({
 		label: "Simulation Shader Module.",
-		code:`
+		code: `
 		@group(0) @binding(0) var<uniform> grid: vec2f;
 		
 		@group(0) @binding(1) var<storage> cellStateIn: array<u32>;
 		@group(0) @binding(2) var<storage, read_write> cellStateOut: array<u32>;
-
-		fn getCellIndex(cell: vec2u) -> u32{
-			return (cell.y * u32(grid.x)) + cell.x;
+		
+		fn getRaw(cell: vec3u) -> u32 {
+			return (cell.x % u32(grid.x)) + (cell.y % u32(grid.y)) * u32(grid.x);
 		}
 
-		fn switchCellState(index: u32) {
-			let index32 = index/32;
-			cellStateOut[index32] = cellStateIn[index32] ^ u32(1 << (index%32));
+		fn getState(cell: vec3u) -> u32 {
+			let raw = getRaw(cell);
+			let byte = raw/32;
+			let bit = raw%32;
+			return (cellStateIn[byte] >> bit) & 1u;
+		}
+
+		fn setState(cell: vec3u, state: bool) {
+			let raw = getRaw(cell);
+			let byte = raw/32;
+			let bit = raw%32;
+			if(state){
+				cellStateOut[byte] |= (1u << bit);
+			} else {
+				cellStateOut[byte] &= ~(1u << bit);
+			}
 		}
 
 		@compute @workgroup_size(${WORKGROUP_SIZE}, ${WORKGROUP_SIZE})
 		fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
-			let index = getCellIndex(cell.xy);
-			cellStateOut[index] = cellStateIn[index];
+			let activeNgbs = getState(vec3u(cell.x    , cell.y - 1, cell.z)) +
+							 getState(vec3u(cell.x    , cell.y + 1, cell.z)) +
+							 getState(vec3u(cell.x - 1, cell.y - 1, cell.z)) +
+							 getState(vec3u(cell.x - 1, cell.y    , cell.z)) +
+							 getState(vec3u(cell.x - 1, cell.y + 1, cell.z)) +
+							 getState(vec3u(cell.x + 1, cell.y - 1, cell.z)) +
+							 getState(vec3u(cell.x + 1, cell.y    , cell.z)) +
+							 getState(vec3u(cell.x + 1, cell.y + 1, cell.z));
+
+			// Conway's game of life rules:
+			switch activeNgbs {
+				case 2: {
+					setState(cell, getState(cell) == 1);
+				}
+				case 3: {
+					setState(cell, true);
+				}
+				default: {
+					setState(cell, false);
+				}
+			}
 		}
 		`
 	});
+
+	const vertexBufferLayout = {
+		arrayStride: 8,
+		attributes: [{
+			format: "float32x2",
+			offset: 0,
+			shaderLocation: 0
+		}]
+	}
 
 	const bindGroupLayout = device.createBindGroupLayout({
 		label: "Cell Bind Group Layout",
@@ -220,14 +257,14 @@ async function start() {
 			binding: 0,
 			visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
 			buffer: {} // defaults to "type: uniform"
-		},{
+		}, {
 			binding: 1,
 			visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
-			buffer: {type: "read-only-storage"} 
-		},{
+			buffer: { type: "read-only-storage" }
+		}, {
 			binding: 2,
 			visibility: GPUShaderStage.COMPUTE,
-			buffer: {type: "storage"}
+			buffer: { type: "storage" }
 		}]
 	});
 
@@ -238,10 +275,10 @@ async function start() {
 			entries: [{
 				binding: 0,
 				resource: { buffer: uniformBuffer }
-			},{
+			}, {
 				binding: 1,
 				resource: { buffer: cellStateBuffer[0] }
-			},{
+			}, {
 				binding: 2,
 				resource: { buffer: cellStateBuffer[1] }
 			}]
@@ -252,10 +289,10 @@ async function start() {
 			entries: [{
 				binding: 0,
 				resource: { buffer: uniformBuffer }
-			},{
+			}, {
 				binding: 1,
 				resource: { buffer: cellStateBuffer[1] }
-			},{
+			}, {
 				binding: 2,
 				resource: { buffer: cellStateBuffer[0] }
 			}]
@@ -264,7 +301,7 @@ async function start() {
 
 	const pipelineLayout = device.createPipelineLayout({
 		label: "Cell Pipeline Layout",
-		bindGroupLayouts: [ bindGroupLayout ]
+		bindGroupLayouts: [bindGroupLayout]
 	});
 
 	const cellPipeline = device.createRenderPipeline({
@@ -293,12 +330,13 @@ async function start() {
 		}
 	});
 
+	// Loop
 	let step = 0;
 	function UpdateTable() {
 		const encoder = device.createCommandEncoder();
 		// Compute Pass
 		const computePass = encoder.beginComputePass();
-		
+
 		computePass.setPipeline(simulationPipeline);
 		computePass.setBindGroup(0, bindGroups[step % 2]);
 		const workgroupCount = Math.ceil(GRID_SIZE / WORKGROUP_SIZE);

@@ -6,14 +6,15 @@
 		<style>
 			body {
 				background-color: #0d1120;
+				color: azure;
 				font-family: 'Courier New', Courier, monospace;
 			}
 			#page_title {
-				color: azure;
 				text-align: center;
 			}
 			#canvas_container {
 				border-style:solid;
+				border-color: black;
 			}
 			#canvas_box {
 				display: block;
@@ -23,12 +24,15 @@
 			#log_box {
 				margin: 50px 10% 0 10%; 
 				align-self: center;
-				height: 150px;
 				border-style:solid;
+				border-color: black;
+			}
+			#messages {
+				height: 200px;
 				overflow-y: scroll;
 				scrollbar-color: gray black;
 			}
-			#log_box div {
+			#messages div {
 				display: flex;
 			}
 			.log_box_title {
@@ -67,10 +71,15 @@
 	<body>
 		<h1 id="page_title">WebGPU Life Game</h1>
 		<div id="canvas_container">
+			<!-- div id="simulation_settings">
+				<label for="bit_density">Bit Density:</label>
+				<input type="number" id="bit_density" min="1" value="2">
+			</div -->
 			<canvas id="canvas_box" height="512", width=512></canvas>
 		</div>
 		<div id="log_box">
 			<h4 class="log_box_title">Log Box</h4>
+			<div id="messages"></div>
 		</div>
 		<script src="lifegame.js" async></script>
 	</body>
